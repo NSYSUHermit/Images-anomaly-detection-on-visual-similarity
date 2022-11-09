@@ -10,9 +10,7 @@ fe = FeatureExtractor()
 
 def Load(folder_path):
     print("###############Load###############")
-    dl.folder_path = "D:\\dataset\\Label_harry\\classification\\Circuit"
-   
-    imgs, label_list = dl.load_data(dl.folder_path)
+    imgs, label_list = dl.load_data(folder_path)
     print("Shape of traing set: ",np.array(imgs).shape)
     print("Label lens: ",len(label_list))
     return imgs, label_list
@@ -24,29 +22,31 @@ def Extract(imgs):
     print(np.array(features_list).shape)
     return features_list
 
-def train_test_split():
+def train_test_split(ok_min, ok_max, total, size=50):
     print("###############train_test_split###############")
-    pass_all = [i for i in range(100,200)]
-    train_ok_list = np.random.choice(a=pass_all, size=10, replace=False)
+    all = [i for i in range(0, total)]
+    pass_all = [i for i in range(ok_min, ok_max)]
+    train_ok_list = np.random.choice(a=pass_all, size=size, replace=False)
     test_ok_list = [i for i in pass_all if i not in train_ok_list]
-    return train_ok_list, test_ok_list
+    test_ng_list = [i for i in all if i not in pass_all]
+    return train_ok_list, test_ok_list, test_ng_list
 
-def dimension_reduction(features_list, train_ok_list, test_ok_list):
+def dimension_reduction(features_list, train_ok_list):
     print("###############dimension_reduction###############")
     model_dr = fe.dimension_reduction_fit(features_list[train_ok_list])
     redu_feat = fe.dimension_reduction_pred(model_dr, features_list)
     return redu_feat
 
-def autoencoder(redu_feat, train_ok_list, test_ok_list):
+def autoencoder(redu_feat, train_ok_list, test_ok_list, test_ng_list, epochs=50):
     print("###############autoencoder###############")
     train = redu_feat[train_ok_list]
     test_ok = redu_feat[test_ok_list]
-    test_ng = redu_feat[0:100]
+    test_ng = redu_feat[test_ng_list]
     test = np.concatenate((test_ok,test_ng), axis = 0)
 
-    ae = fe.autoencoder_fit(train, epochs=100)
-    pred_ok = fe.autoencoder_pred(ae, train, test_ok, limits=1)
-    pred_ng = fe.autoencoder_pred(ae, train, test_ng, limits=1)
+    fe.autoencoder_fit(train, epochs=epochs)
+    pred_ok = fe.autoencoder_pred("best_model.h5", train, test_ok, limits=1)
+    pred_ng = fe.autoencoder_pred("best_model.h5", train, test_ng, limits=1)
 
     y_pred = np.concatenate((pred_ok,pred_ng), axis = 0)
     y_pred = np.multiply(y_pred, 1)
@@ -88,13 +88,13 @@ def OCSVM(train, test, y_true):
 
     print(f'{acc:.3f}',"/",f'{prec:.3f}',"/",f'{recall:.3f}')
 
-def Manifolds(train, test, y_true):
+def Manifolds(train, test_ok, test_ng, y_true):
     print("###############Manifolds###############")
-    tsne_x =  np.concatenate((train,test_ok), axis = 0)
+    tsne_x =  np.concatenate((train, test_ok), axis = 0)
     tsne_x = np.concatenate((tsne_x,test_ng), axis = 0)
     tsne_y = ["train"] * len(train) + ["test_ok"] * len(test_ok) + ["test_ng"] * len(test_ng)
     train_y = ["train"] * len(train) + ["test_ok"] * len(test_ok)
-    label_tsne = train_y + label_list[750:]
+    label_tsne = train_y
 
     from sklearn.manifold import TSNE
     import seaborn as sns
@@ -131,15 +131,9 @@ def Clustering(train):
 if __name__ == '__main__':
     print("Input size:",dl.target_size)
     folder_path = "D:\\dataset\\Label_harry\\classification\\Circuit"
-    #folder_path = "D:\\dataset\\Label_harry\\object_detection\\LIDL_dataset"
 
     imgs, label_list = Load(folder_path)
     features_list = Extract(imgs)
-    train_ok_list, test_ok_list = train_test_split()
-    redu_feat = dimension_reduction(features_list, train_ok_list, test_ok_list)
-    train, test, y_true = autoencoder(redu_feat, train_ok_list, test_ok_list)
-
-
-
-
-
+    train_ok_list, test_ok_list, test_ng_list = train_test_split()
+    redu_feat = dimension_reduction(features_list, train_ok_list)
+    train, test, y_true = autoencoder(redu_feat, train_ok_list, test_ok_list, test_ng_list)
